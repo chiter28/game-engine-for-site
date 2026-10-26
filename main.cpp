@@ -1,7 +1,10 @@
 #include <iostream>
+#include <print>
 
 int main()
 {
-    std::cout << "Hello, Engine!\n";
+    std::println("Hello, {}!", "Engine");
+ 
+
     return 0;
 }
