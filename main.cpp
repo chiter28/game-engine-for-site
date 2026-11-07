@@ -1,7 +1,10 @@
 #include <print>
 
+#include <GLFW/glfw3.h>
+
+
 int main()
 {
-    std::println("Hello, {}!", "Engine");
+    std::println("GLFW {}", glfwGetVersionString());
     return 0;
 }
