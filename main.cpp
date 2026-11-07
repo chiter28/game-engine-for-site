@@ -4,6 +4,13 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+// Ask laptop drivers to run this program on the discrete GPU.
+extern "C"
+{
+    __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+
 
 int main()
 {
@@ -38,6 +45,7 @@ int main()
     }
 
     std::cout << std::format("OpenGL {}\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+    std::cout << std::format("GPU    {}\n", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 
     while (!glfwWindowShouldClose(window))
     {
