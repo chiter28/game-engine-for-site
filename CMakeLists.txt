@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.28)
 # ============================================================================
 # Project
 # ============================================================================
-project(Engine LANGUAGES CXX)
+project(Engine LANGUAGES C CXX)
 
 # ============================================================================
 # Dependencies
@@ -24,6 +24,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
+# --- glad -------------------------------------------------------------------
+add_library(glad STATIC external/glad/src/gl.c)
+target_include_directories(glad PUBLIC external/glad/include)
+
 # ============================================================================
 # App
 # ============================================================================
@@ -35,4 +39,4 @@ if(MSVC)
     target_compile_options(app PRIVATE /W4)
 endif()
 
-target_link_libraries(app PRIVATE glfw)
+target_link_libraries(app PRIVATE glfw glad)
