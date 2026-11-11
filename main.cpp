@@ -1,5 +1,7 @@
+#include <cstddef>
 #include <format>
 #include <iostream>
+#include <iterator>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -14,28 +16,36 @@ extern "C"
 const char* vertexShaderSource = R"(
     #version 460 core
 
-    const vec2 positions[3] = vec2[3](
-        vec2(-0.5, -0.5),
-        vec2( 0.5, -0.5),
-        vec2( 0.0,  0.5)
-    );
+    layout(location = 0) in vec2 inPosition;
+    layout(location = 1) in vec3 inColor;
+
+    out vec3 vertexColor;
 
     void main()
     {
-        gl_Position = vec4(positions[gl_VertexID], 0.0, 1.0);
+        gl_Position = vec4(inPosition, 0.0, 1.0);
+        vertexColor = inColor;
     }
 )";
 
 const char* fragmentShaderSource = R"(
     #version 460 core
 
+    in vec3 vertexColor;
+
     out vec4 color;
 
     void main()
     {
-        color = vec4(1.0, 0.5, 0.2, 1.0);
+        color = vec4(vertexColor, 1.0);
     }
 )";
+
+struct Vertex
+{
+    float position[2];
+    float color[3];
+};
 
 GLuint compileShader(GLenum type, const char* source)
 {
@@ -107,7 +117,6 @@ int main()
     std::cout << std::format("OpenGL {}\n", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
     std::cout << std::format("GPU    {}\n", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 
-    // shader
     GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
     GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
 
@@ -116,8 +125,30 @@ int main()
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    const Vertex vertices[] = {
+        { { -0.5f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
+        { { 0.5f, -0.5f }, { 0.0f, 1.0f, 0.0f } },
+        { { 0.0f,  0.5f }, { 0.0f, 0.0f, 1.0f } },
+    };
+
+    const GLsizei vertexCount = static_cast<GLsizei>(std::size(vertices));
+
+    GLuint vbo = 0;
+    glCreateBuffers(1, &vbo);
+    glNamedBufferStorage(vbo, sizeof(vertices), vertices, 0);
+
     GLuint vao = 0;
     glCreateVertexArrays(1, &vao);
+
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(Vertex));
+
+    glEnableVertexArrayAttrib(vao, 0);
+    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
+    glVertexArrayAttribBinding(vao, 0, 0);
+
+    glEnableVertexArrayAttrib(vao, 1);
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, color));
+    glVertexArrayAttribBinding(vao, 1, 0);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -128,12 +159,13 @@ int main()
 
         glUseProgram(program);
         glBindVertexArray(vao);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(GL_TRIANGLES, 0, vertexCount);
 
         glfwSwapBuffers(window);
     }
 
     glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
     glDeleteProgram(program);
 
     glfwDestroyWindow(window);
