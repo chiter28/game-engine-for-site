@@ -81,6 +81,12 @@ struct Vertex
     return program;
 }
 
+void APIENTRY onOpenGLMessage(GLenum /*source*/, GLenum /*type*/, GLuint /*id*/, GLenum /*severity*/,
+                              GLsizei /*length*/, const GLchar* message, const void* /*userParam*/)
+{
+    std::println(stderr, "OpenGL: {}", message);
+}
+
 int main()
 {
     glfwSetErrorCallback([](int code, const char* description) {
@@ -95,6 +101,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Engine", nullptr, nullptr);
     if (!window)
@@ -112,6 +119,11 @@ int main()
         glfwTerminate();
         return 1;
     }
+
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(onOpenGLMessage, nullptr);
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
 
     std::println("OpenGL {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
     std::println("GPU    {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
