@@ -1,6 +1,9 @@
 #include <cstddef>
 #include <print>
 #include <iterator>
+#include <string>
+#include <string_view>
+#include <unordered_set>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -81,10 +84,28 @@ struct Vertex
     return program;
 }
 
-void APIENTRY onOpenGLMessage(GLenum /*source*/, GLenum /*type*/, GLuint /*id*/, GLenum /*severity*/,
-                              GLsizei /*length*/, const GLchar* message, const void* /*userParam*/)
+[[nodiscard]] constexpr std::string_view severityName(GLenum severity)
 {
-    std::println(stderr, "OpenGL: {}", message);
+    switch (severity)
+    {
+        case GL_DEBUG_SEVERITY_HIGH:         return "HIGH";
+        case GL_DEBUG_SEVERITY_MEDIUM:       return "MEDIUM";
+        case GL_DEBUG_SEVERITY_LOW:          return "LOW";
+        case GL_DEBUG_SEVERITY_NOTIFICATION: return "NOTIFICATION";
+        default:                             return "UNKNOWN";
+    }
+}
+
+void APIENTRY onOpenGLMessage(GLenum /*source*/, GLenum /*type*/, GLuint /*id*/, GLenum severity,
+                              GLsizei length, const GLchar* message, const void* /*userParam*/)
+{
+    static std::unordered_set<std::string> shown;
+    if (!shown.emplace(message, length).second)
+    {
+        return;
+    }
+
+    std::println(stderr, "OpenGL [{}]: {}", severityName(severity), std::string_view(message, length));
 }
 
 int main()
