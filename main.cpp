@@ -1,8 +1,5 @@
 #include <cstddef>
-#include <expected>
 #include <filesystem>
-#include <format>
-#include <fstream>
 #include <iterator>
 #include <print>
 #include <string>
@@ -11,6 +8,8 @@
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
+
+#include "Shader.h"
 
 // Ask laptop drivers to run this program on the discrete GPU.
 extern "C"
@@ -24,57 +23,6 @@ struct Vertex
     float position[2];
     float color[3];
 };
-
-[[nodiscard]] std::expected<std::string, std::string> readFile(const std::filesystem::path& path)
-{
-    std::ifstream file(path, std::ios::binary);
-    if (!file)
-    {
-        return std::unexpected(std::format("Cannot open {}", path.string()));
-    }
-
-    std::string text(std::filesystem::file_size(path), '\0');
-    if (!file.read(text.data(), text.size()))
-    {
-        return std::unexpected(std::format("Cannot read {}", path.string()));
-    }
-    return text;
-}
-
-[[nodiscard]] GLuint compileShader(GLenum type, const char* source)
-{
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-
-    GLint success = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        char message[1024];
-        glGetShaderInfoLog(shader, sizeof(message), nullptr, message);
-        std::println(stderr, "Shader error: {}", message);
-    }
-    return shader;
-}
-
-[[nodiscard]] GLuint linkProgram(GLuint vertexShader, GLuint fragmentShader)
-{
-    GLuint program = glCreateProgram();
-    glAttachShader(program, vertexShader);
-    glAttachShader(program, fragmentShader);
-    glLinkProgram(program);
-
-    GLint success = GL_FALSE;
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success)
-    {
-        char message[1024];
-        glGetProgramInfoLog(program, sizeof(message), nullptr, message);
-        std::println(stderr, "Program error: {}", message);
-    }
-    return program;
-}
 
 [[nodiscard]] std::string_view severityName(GLenum severity)
 {
@@ -106,26 +54,64 @@ void APIENTRY onOpenGLMessage(
     std::println(stderr, "OpenGL [{}]: {}", severityName(severity), std::string_view(message, length));
 }
 
+[[nodiscard]] bool run(GLFWwindow* window)
+{
+    const auto shaderDir = std::filesystem::path(ASSETS_DIR).make_preferred() / "shaders";
+
+    const auto shader = Shader::FromFiles(shaderDir / "triangle.vert", shaderDir / "triangle.frag");
+    if (!shader)
+    {
+        std::println(stderr, "{}", shader.error());
+        return false;
+    }
+
+    const Vertex vertices[] = {
+        { .position = { -0.5f, -0.5f }, .color = { 1.0f, 0.0f, 0.0f } },
+        { .position = {  0.5f, -0.5f }, .color = { 0.0f, 1.0f, 0.0f } },
+        { .position = {  0.0f,  0.5f }, .color = { 0.0f, 0.0f, 1.0f } },
+    };
+
+    const GLsizei vertexCount = static_cast<GLsizei>(std::size(vertices));
+
+    GLuint vbo = 0;
+    glCreateBuffers(1, &vbo);
+    glNamedBufferStorage(vbo, sizeof(vertices), vertices, 0);
+
+    GLuint vao = 0;
+    glCreateVertexArrays(1, &vao);
+
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(Vertex));
+
+    glEnableVertexArrayAttrib(vao, 0);
+    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
+    glVertexArrayAttribBinding(vao, 0, 0);
+
+    glEnableVertexArrayAttrib(vao, 1);
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, color));
+    glVertexArrayAttribBinding(vao, 1, 0);
+
+    while (!glfwWindowShouldClose(window))
+    {
+        glfwPollEvents();
+
+        glClearColor(0.10f, 0.12f, 0.16f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        shader->Use();
+        glBindVertexArray(vao);
+        glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+
+        glfwSwapBuffers(window);
+    }
+
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+
+    return true;
+}
+
 int main()
 {
-    const std::filesystem::path shaderDir = std::filesystem::path(ASSETS_DIR).make_preferred() / "shaders";
-
-    const auto vertexSource = readFile(shaderDir / "triangle.vert");
-    const auto fragmentSource = readFile(shaderDir / "triangle.frag");
-
-    if (!vertexSource)
-    {
-        std::println(stderr, "{}", vertexSource.error());
-    }
-    if (!fragmentSource)
-    {
-        std::println(stderr, "{}", fragmentSource.error());
-    }
-    if (!vertexSource || !fragmentSource)
-    {
-        return 1;
-    }
-
     glfwSetErrorCallback([](int code, const char* description) {
         std::println(stderr, "GLFW error {}: {}", code, description);
     });
@@ -165,58 +151,9 @@ int main()
     std::println("OpenGL {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
     std::println("GPU    {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 
-    GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource->c_str());
-    GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource->c_str());
-
-    GLuint program = linkProgram(vertexShader, fragmentShader);
-
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
-    const Vertex vertices[] = {
-        { .position = { -0.5f, -0.5f }, .color = { 1.0f, 0.0f, 0.0f } },
-        { .position = {  0.5f, -0.5f }, .color = { 0.0f, 1.0f, 0.0f } },
-        { .position = {  0.0f,  0.5f }, .color = { 0.0f, 0.0f, 1.0f } },
-    };
-
-    const GLsizei vertexCount = static_cast<GLsizei>(std::size(vertices));
-
-    GLuint vbo = 0;
-    glCreateBuffers(1, &vbo);
-    glNamedBufferStorage(vbo, sizeof(vertices), vertices, 0);
-
-    GLuint vao = 0;
-    glCreateVertexArrays(1, &vao);
-
-    glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(Vertex));
-
-    glEnableVertexArrayAttrib(vao, 0);
-    glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
-    glVertexArrayAttribBinding(vao, 0, 0);
-
-    glEnableVertexArrayAttrib(vao, 1);
-    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, color));
-    glVertexArrayAttribBinding(vao, 1, 0);
-
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
-
-        glClearColor(0.10f, 0.12f, 0.16f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        glUseProgram(program);
-        glBindVertexArray(vao);
-        glDrawArrays(GL_TRIANGLES, 0, vertexCount);
-
-        glfwSwapBuffers(window);
-    }
-
-    glDeleteVertexArrays(1, &vao);
-    glDeleteBuffers(1, &vbo);
-    glDeleteProgram(program);
+    const bool success = run(window);
 
     glfwDestroyWindow(window);
     glfwTerminate();
-    return 0;
+    return success ? 0 : 1;
 }
