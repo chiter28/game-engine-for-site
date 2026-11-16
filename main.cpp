@@ -1,6 +1,10 @@
 #include <cstddef>
-#include <print>
+#include <expected>
+#include <filesystem>
+#include <format>
+#include <fstream>
 #include <iterator>
+#include <print>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -15,39 +19,27 @@ extern "C"
     __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
 
-const char* vertexShaderSource = R"(
-    #version 460 core
-
-    layout(location = 0) in vec2 inPosition;
-    layout(location = 1) in vec3 inColor;
-
-    out vec3 vertexColor;
-
-    void main()
-    {
-        gl_Position = vec4(inPosition, 0.0, 1.0);
-        vertexColor = inColor;
-    }
-)";
-
-const char* fragmentShaderSource = R"(
-    #version 460 core
-
-    in vec3 vertexColor;
-
-    out vec4 color;
-
-    void main()
-    {
-        color = vec4(vertexColor, 1.0);
-    }
-)";
-
 struct Vertex
 {
     float position[2];
     float color[3];
 };
+
+[[nodiscard]] std::expected<std::string, std::string> readFile(const std::filesystem::path& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file)
+    {
+        return std::unexpected(std::format("Cannot open {}", path.string()));
+    }
+
+    std::string text(std::filesystem::file_size(path), '\0');
+    if (!file.read(text.data(), text.size()))
+    {
+        return std::unexpected(std::format("Cannot read {}", path.string()));
+    }
+    return text;
+}
 
 [[nodiscard]] GLuint compileShader(GLenum type, const char* source)
 {
@@ -116,6 +108,24 @@ void APIENTRY onOpenGLMessage(
 
 int main()
 {
+    const std::filesystem::path shaderDir = std::filesystem::path(ASSETS_DIR).make_preferred() / "shaders";
+
+    const auto vertexSource = readFile(shaderDir / "triangle.vert");
+    const auto fragmentSource = readFile(shaderDir / "triangle.frag");
+
+    if (!vertexSource)
+    {
+        std::println(stderr, "{}", vertexSource.error());
+    }
+    if (!fragmentSource)
+    {
+        std::println(stderr, "{}", fragmentSource.error());
+    }
+    if (!vertexSource || !fragmentSource)
+    {
+        return 1;
+    }
+
     glfwSetErrorCallback([](int code, const char* description) {
         std::println(stderr, "GLFW error {}: {}", code, description);
     });
@@ -155,8 +165,8 @@ int main()
     std::println("OpenGL {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
     std::println("GPU    {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 
-    GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
-    GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
+    GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSource->c_str());
+    GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSource->c_str());
 
     GLuint program = linkProgram(vertexShader, fragmentShader);
 

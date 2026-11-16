@@ -35,6 +35,8 @@ add_executable(app main.cpp)
 
 target_compile_features(app PRIVATE cxx_std_23)
 
+target_compile_definitions(app PRIVATE ASSETS_DIR="${PROJECT_SOURCE_DIR}/assets")
+
 if(MSVC)
     target_compile_options(app PRIVATE /W4)
 endif()
