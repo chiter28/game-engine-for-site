@@ -31,7 +31,7 @@ target_include_directories(glad PUBLIC external/glad/include)
 # ============================================================================
 # App
 # ============================================================================
-add_executable(app main.cpp)
+add_executable(app main.cpp Shader.cpp)
 
 target_compile_features(app PRIVATE cxx_std_23)
 
