@@ -1,11 +1,13 @@
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <iterator>
+#include <limits>
 #include <print>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -23,6 +25,12 @@ struct Vertex
 {
     float position[2];
     float color[3];
+};
+
+struct Mesh
+{
+    std::vector<Vertex> vertices;
+    std::vector<std::uint16_t> indices;
 };
 
 [[nodiscard]] std::string_view severityName(GLenum severity)
@@ -55,6 +63,49 @@ void APIENTRY onOpenGLMessage(
     std::println(stderr, "OpenGL [{}]: {}", severityName(severity), std::string_view(message, length));
 }
 
+[[nodiscard]] Mesh makeGrid(int cells)
+{
+    const int side = cells + 1;
+    assert(cells >= 1);
+    assert(side * side - 1 <= std::numeric_limits<std::uint16_t>::max());
+
+    Mesh mesh;
+    mesh.vertices.reserve(side * side);
+    mesh.indices.reserve(6 * cells * cells);
+
+    for (int row = 0; row < side; ++row)
+    {
+        for (int column = 0; column < side; ++column)
+        {
+            const float u = static_cast<float>(column) / cells;
+            const float v = static_cast<float>(row) / cells;
+
+            mesh.vertices.push_back({
+                .position = { u - 0.5f, v - 0.5f },
+                .color = { 1.0f - u, u + v - 2.0f * u * v, u * v },
+            });
+        }
+    }
+
+    for (int row = 0; row < cells; ++row)
+    {
+        for (int column = 0; column < cells; ++column)
+        {
+            const auto bottomLeft = static_cast<std::uint16_t>(row * side + column);
+            const auto bottomRight = static_cast<std::uint16_t>(bottomLeft + 1);
+            const auto topLeft = static_cast<std::uint16_t>(bottomLeft + side);
+            const auto topRight = static_cast<std::uint16_t>(topLeft + 1);
+
+            mesh.indices.insert(mesh.indices.end(), {
+                bottomLeft, bottomRight, topRight,
+                bottomLeft, topRight, topLeft,
+            });
+        }
+    }
+
+    return mesh;
+}
+
 [[nodiscard]] bool run(GLFWwindow* window)
 {
     const auto shaderDir = std::filesystem::path(ASSETS_DIR).make_preferred() / "shaders";
@@ -66,27 +117,17 @@ void APIENTRY onOpenGLMessage(
         return false;
     }
 
-    const Vertex vertices[] = {
-        { .position = { -0.5f, -0.5f }, .color = { 1.0f, 0.0f, 0.0f } },
-        { .position = {  0.5f, -0.5f }, .color = { 0.0f, 1.0f, 0.0f } },
-        { .position = {  0.5f,  0.5f }, .color = { 0.0f, 0.0f, 1.0f } },
-        { .position = { -0.5f,  0.5f }, .color = { 1.0f, 1.0f, 0.0f } },
-    };
+    const Mesh grid = makeGrid(1);
 
-    const std::uint16_t indices[] = {
-        0, 1, 2,
-        0, 2, 3,
-    };
-
-    const GLsizei indexCount = static_cast<GLsizei>(std::size(indices));
+    const GLsizei indexCount = static_cast<GLsizei>(grid.indices.size());
 
     GLuint vbo = 0;
     glCreateBuffers(1, &vbo);
-    glNamedBufferStorage(vbo, sizeof(vertices), vertices, 0);
+    glNamedBufferStorage(vbo, grid.vertices.size() * sizeof(Vertex), grid.vertices.data(), 0);
 
     GLuint ebo = 0;
     glCreateBuffers(1, &ebo);
-    glNamedBufferStorage(ebo, sizeof(indices), indices, 0);
+    glNamedBufferStorage(ebo, grid.indices.size() * sizeof(std::uint16_t), grid.indices.data(), 0);
 
     GLuint vao = 0;
     glCreateVertexArrays(1, &vao);
