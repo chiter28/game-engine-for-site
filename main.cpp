@@ -63,7 +63,7 @@ void APIENTRY onOpenGLMessage(
     std::println(stderr, "OpenGL [{}]: {}", severityName(severity), std::string_view(message, length));
 }
 
-[[nodiscard]] Mesh makeGrid(int cells)
+[[nodiscard]] Mesh makeGrid(int cells, float size = 1.0f)
 {
     const int side = cells + 1;
     assert(cells >= 1);
@@ -81,7 +81,7 @@ void APIENTRY onOpenGLMessage(
             const float v = static_cast<float>(row) / cells;
 
             mesh.vertices.push_back({
-                .position = { u - 0.5f, v - 0.5f },
+                .position = { (u - 0.5f) * size, (v - 0.5f) * size },
                 .color = { 1.0f - u, u + v - 2.0f * u * v, u * v },
             });
         }
@@ -117,17 +117,26 @@ void APIENTRY onOpenGLMessage(
         return false;
     }
 
-    const Mesh grid = makeGrid(1);
+    constexpr int gridCells = 10;
+    const Mesh grid = makeGrid(gridCells, 1.8f);
+
+    const std::size_t vertexBytes = grid.vertices.size() * sizeof(Vertex);
+    const std::size_t indexBytes = grid.indices.size() * sizeof(std::uint16_t);
+    const std::size_t bytesWithoutIndices = grid.indices.size() * sizeof(Vertex);
+
+    std::println("Grid {0}x{0}: {1} vertices, {2} indices", gridCells, grid.vertices.size(), grid.indices.size());
+    std::println("With indices:    {} bytes", vertexBytes + indexBytes);
+    std::println("Without indices: {} bytes", bytesWithoutIndices);
 
     const GLsizei indexCount = static_cast<GLsizei>(grid.indices.size());
 
     GLuint vbo = 0;
     glCreateBuffers(1, &vbo);
-    glNamedBufferStorage(vbo, grid.vertices.size() * sizeof(Vertex), grid.vertices.data(), 0);
+    glNamedBufferStorage(vbo, vertexBytes, grid.vertices.data(), 0);
 
     GLuint ebo = 0;
     glCreateBuffers(1, &ebo);
-    glNamedBufferStorage(ebo, grid.indices.size() * sizeof(std::uint16_t), grid.indices.data(), 0);
+    glNamedBufferStorage(ebo, indexBytes, grid.indices.data(), 0);
 
     GLuint vao = 0;
     glCreateVertexArrays(1, &vao);
