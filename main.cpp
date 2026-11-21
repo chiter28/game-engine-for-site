@@ -6,6 +6,7 @@
 #include <print>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -29,8 +30,10 @@ struct Vertex
 
 struct Mesh
 {
+    using Index = std::uint16_t;
+
     std::vector<Vertex> vertices;
-    std::vector<std::uint16_t> indices;
+    std::vector<Index> indices;
 };
 
 [[nodiscard]] std::string_view severityName(GLenum severity)
@@ -67,7 +70,7 @@ void APIENTRY onOpenGLMessage(
 {
     const int side = cells + 1;
     assert(cells >= 1);
-    assert(side * side - 1 <= std::numeric_limits<std::uint16_t>::max());
+    assert(side * side - 1 <= std::numeric_limits<Mesh::Index>::max());
 
     Mesh mesh;
     mesh.vertices.reserve(side * side);
@@ -91,10 +94,10 @@ void APIENTRY onOpenGLMessage(
     {
         for (int column = 0; column < cells; ++column)
         {
-            const auto bottomLeft = static_cast<std::uint16_t>(row * side + column);
-            const auto bottomRight = static_cast<std::uint16_t>(bottomLeft + 1);
-            const auto topLeft = static_cast<std::uint16_t>(bottomLeft + side);
-            const auto topRight = static_cast<std::uint16_t>(topLeft + 1);
+            const auto bottomLeft = static_cast<Mesh::Index>(row * side + column);
+            const auto bottomRight = static_cast<Mesh::Index>(bottomLeft + 1);
+            const auto topLeft = static_cast<Mesh::Index>(bottomLeft + side);
+            const auto topRight = static_cast<Mesh::Index>(topLeft + 1);
 
             mesh.indices.insert(mesh.indices.end(), {
                 bottomLeft, bottomRight, topRight,
@@ -121,7 +124,7 @@ void APIENTRY onOpenGLMessage(
     const Mesh grid = makeGrid(gridCells, 1.8f);
 
     const std::size_t vertexBytes = grid.vertices.size() * sizeof(Vertex);
-    const std::size_t indexBytes = grid.indices.size() * sizeof(std::uint16_t);
+    const std::size_t indexBytes = grid.indices.size() * sizeof(Mesh::Index);
     const std::size_t bytesWithoutIndices = grid.indices.size() * sizeof(Vertex);
 
     std::println("Grid {0}x{0}: {1} vertices, {2} indices", gridCells, grid.vertices.size(), grid.indices.size());
@@ -151,6 +154,8 @@ void APIENTRY onOpenGLMessage(
     glEnableVertexArrayAttrib(vao, 1);
     glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, color));
     glVertexArrayAttribBinding(vao, 1, 0);
+
+    static_assert(std::is_same_v<Mesh::Index, std::uint16_t>, "glDrawElements below uses GL_UNSIGNED_SHORT");
 
     while (!glfwWindowShouldClose(window))
     {
