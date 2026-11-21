@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <iterator>
 #include <print>
@@ -68,19 +69,30 @@ void APIENTRY onOpenGLMessage(
     const Vertex vertices[] = {
         { .position = { -0.5f, -0.5f }, .color = { 1.0f, 0.0f, 0.0f } },
         { .position = {  0.5f, -0.5f }, .color = { 0.0f, 1.0f, 0.0f } },
-        { .position = {  0.0f,  0.5f }, .color = { 0.0f, 0.0f, 1.0f } },
+        { .position = {  0.5f,  0.5f }, .color = { 0.0f, 0.0f, 1.0f } },
+        { .position = { -0.5f,  0.5f }, .color = { 1.0f, 1.0f, 0.0f } },
     };
 
-    const GLsizei vertexCount = static_cast<GLsizei>(std::size(vertices));
+    const std::uint16_t indices[] = {
+        0, 1, 2,
+        0, 2, 3,
+    };
+
+    const GLsizei indexCount = static_cast<GLsizei>(std::size(indices));
 
     GLuint vbo = 0;
     glCreateBuffers(1, &vbo);
     glNamedBufferStorage(vbo, sizeof(vertices), vertices, 0);
 
+    GLuint ebo = 0;
+    glCreateBuffers(1, &ebo);
+    glNamedBufferStorage(ebo, sizeof(indices), indices, 0);
+
     GLuint vao = 0;
     glCreateVertexArrays(1, &vao);
 
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(Vertex));
+    glVertexArrayElementBuffer(vao, ebo);
 
     glEnableVertexArrayAttrib(vao, 0);
     glVertexArrayAttribFormat(vao, 0, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
@@ -99,12 +111,14 @@ void APIENTRY onOpenGLMessage(
 
         shader->Use();
         glBindVertexArray(vao);
-        glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+        glPolygonMode(GL_FRONT_AND_BACK, glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS ? GL_LINE : GL_FILL);
+        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_SHORT, nullptr);
 
         glfwSwapBuffers(window);
     }
 
     glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &ebo);
     glDeleteBuffers(1, &vbo);
 
     return true;
